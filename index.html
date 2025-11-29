@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>🎡 عجلة الحظ | ultras</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700&display=swap" rel="stylesheet">
+
+<style>
+  body {
+  margin: 0;
+  font-family: "Cairo", sans-serif;
+  background-image: url("luckback.jpg");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  color: #fff;
+  text-align: center;
+  height: 100vh;
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+  #logo {
+    font-size: 30px;
+    color: #FFD700;
+    margin-bottom: 8px;
+    text-shadow: 0 0 10px #ffd700;
+  }
+
+  h2 {
+    margin: 0;
+    margin-bottom: 15px;
+  }
+
+  /* -------------------- العجلة ---------------------- */
+  #wheel-container {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    margin: 0 auto;
+    margin-bottom: 70px;  /* 🔥 زيادة المسافة بين SPIN والعجلة */
+  }
+
+  canvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 12px solid #FFD700;
+    transition: transform 4s cubic-bezier(0.33,1,0.68,1);
+  }
+
+  /* المؤشر كما هو بدون أي تغيير */
+  #pointer {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translate(50%, -50%);
+    width: 22px;
+    height: 22px;
+    background: #0a47bb;
+    border-radius: 50%;
+    border: 2px solid #003;
+    z-index: 9999;
+  }
+
+  #pointer::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: -12px;
+    transform: translateY(-50%);
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-right: 12px solid #0a47bb;
+  }
+
+  /* زر SPIN */
+  #spin-btn {
+    width: 180px;
+    padding: 12px;
+    font-size: 20px;
+    background: linear-gradient(45deg,#0a47bb,#5ea8ff);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 0 12px #5ea8ff;
+
+    margin: 0 auto;
+    display: block;
+  }
+
+  #spin-btn:active {
+    transform: scale(0.96);
+  }
+
+  #result {
+    margin-top: 12px;
+    font-size: 22px;
+    color: #FFD700;
+    text-shadow: 0 0 8px #ffaa00;
+  }
+
+  /* سقوط العملات */
+  .coin {
+    position: fixed;
+    top: -50px;
+    width: 35px;
+    height: 35px;
+    background-image: url('https://cdn-icons-png.flaticon.com/512/217/217853.png');
+    background-size: cover;
+    animation: fall linear forwards;
+  }
+
+  @keyframes fall {
+    0% { transform: translateY(-50px) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(120vh) rotate(360deg); opacity: 0; }
+  }
+
+  /* اهتزاز الشاشة */
+  .shake {
+    animation: shakeAnim 0.45s ease-in-out;
+  }
+
+  @keyframes shakeAnim {
+    0% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-6px); }
+    80% { transform: translateX(6px); }
+    100% { transform: translateX(0); }
+  }
+</style>
+</head>
+
+<body>
+
+<div id="logo">ultras BOT</div>
+<h2>🎰 عجلة الحظ الذهبية</h2>
+
+<div id="wheel-container">
+  <div id="pointer"></div>
+  <canvas id="wheel"></canvas>
+</div>
+
+<button id="spin-btn">🎡 SPIN</button>
+
+<div id="result"></div>
+
+<!-- الأصوات -->
+<audio id="spin-sound" src="spin.mp3"></audio>
+<audio id="win-sound" src="win.mp3"></audio>
+<audio id="lose-sound" src="lose.mp3"></audio>
+
+<script>
+/* ------------------- قراءة النتيجة من الرابط ------------------- */
+
+const params = new URLSearchParams(location.search);
+const resultValue = params.get("result") || "0";
+
+/* تحويل نتيجة الباكإند إلى فهرس على العجلة */
+function getPrizeIndex(res) {
+  switch (res) {
+    case "0": return 0;
+    case "5000": return 1;
+    case "10000": return 2;
+    case "15000": return 3;
+    case "25000": return 4;
+    case "100000": return 5;
+    case "250000": return 6;
+    case "1M": return 7;
+    case "5M": return 8;
+    case "10M": return 9;
+    default: return 0;
+  }
+}
+
+const prizeIndex = getPrizeIndex(resultValue);
+
+/* -------------------- العجلة ------------------------- */
+
+const prizes = ["حظ أوفر","5,000","10,000","15,000","25,000","100,000","250,000","1M","5M","10M"];
+const colors = ["#ffffff","#0a47bb"];
+
+const canvas = document.getElementById("wheel");
+const ctx = canvas.getContext("2d");
+canvas.width = 320;
+canvas.height = 320;
+
+function drawWheel() {
+  const r = canvas.width / 2;
+  const arc = (2*Math.PI) / prizes.length;
+
+  for (let i=0;i<prizes.length;i++){
+    const angle = i * arc;
+    ctx.beginPath();
+    ctx.fillStyle = colors[i % 2];
+    ctx.moveTo(r,r);
+    ctx.arc(r,r,r,angle,angle+arc);
+    ctx.fill();
+
+    ctx.save();
+    ctx.translate(r,r);
+    ctx.rotate(angle + arc/2);
+    ctx.fillStyle = "#000";
+    ctx.font = "bold 15px Cairo";
+    ctx.textAlign = "right";
+    ctx.fillText(prizes[i], r-15, 5);
+    ctx.restore();
+  }
+}
+drawWheel();
+
+/* -------------------- الأصوات -------------------- */
+
+const spinSound = document.getElementById("spin-sound");
+const winSound  = document.getElementById("win-sound");
+const loseSound = document.getElementById("lose-sound");
+
+const resultDiv = document.getElementById("result");
+const spinBtn   = document.getElementById("spin-btn");
+
+/* -------------------- العملات --------------------- */
+
+function dropCoins() {
+  for (let i=0;i<30;i++){
+    const coin = document.createElement("div");
+    coin.className = "coin";
+    coin.style.left = Math.random()*100 + "vw";
+    coin.style.animationDuration = (1 + Math.random()*1.5) + "s";
+    document.body.appendChild(coin);
+
+    setTimeout(()=>coin.remove(),2500);
+  }
+}
+
+/* -------------------- الدوران --------------------- */
+
+spinBtn.addEventListener("click", () => {
+
+  spinBtn.style.display = "none";
+
+  const arcSize = 360 / prizes.length;
+
+  const stopAngle =
+    (360 - (prizeIndex * arcSize + arcSize / 2) + 3) % 360;
+
+  const rotation = 360 * 5 + stopAngle;
+
+  spinSound.play();
+  canvas.style.transform = `rotate(${rotation}deg)`;
+
+  setTimeout(() => {
+    const isLose = prizeIndex === 0;
+
+    document.body.classList.add("shake");
+    setTimeout(() => document.body.classList.remove("shake"), 500);
+
+    if (isLose) {
+      loseSound.play();
+      resultDiv.innerHTML = `😢 <b>حظ أوفر!</b>`;
+    } else {
+      winSound.play();
+      dropCoins();
+      resultDiv.innerHTML = `🎉 مبروك! ربحت <b>${prizes[prizeIndex]}</b> 🪙`;
+    }
+
+  }, 4000);
+
+});
+</script>
+
+</body>
+</html>
